@@ -1,0 +1,17 @@
+{
+  "name": "file-manager",
+  "version": "1.0.0",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js --username=%npm_config_username%",
+    "start:n": "node src/main.js --username=John"
+  },
+  "keywords": [],
+  "engines": {
+    "node": ">= 18.0.0"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "type": "module"
+}
