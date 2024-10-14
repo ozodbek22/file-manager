@@ -1,101 +1,89 @@
-import { createInterface } from 'readline';
-import os from 'os';
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import crypto from 'crypto';
-import { createGzip, createGunzip } from 'zlib';
-import { createReadStream, createWriteStream } from 'fs';
+import {createInterface} from 'node:readline';
+import os from 'node:os';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
-const __filename = fileURLToPath(import.meta.url);
-// const __dirname = path.dirname(__filename);
+const username = process.env.npm_config_username || 'User';
 
-const username = process.argv
-    .find(arg => arg.startsWith('--username='))
-    ?.split('=')[1] || 'User';
-// console.log(process.argv);
 let currentDir = os.homedir();
+// const rootDir = path.parse(currentDir).root;
 
-console.log(`You are currently in: ${currentDir}` + os.EOL);
+console.log(`You're currently in ${currentDir}`);
 
 console.log(`Welcome to the File Manager, ${username}!`);
 
-const rl = createInterface({
+const readlineInterface = createInterface({
     input: process.stdin,
     output: process.stdout,
-    prompt: '> '
+    prompt: 'Enter command > '
 });
 
 
-rl.on('line', async (line) => {
-    const [command, ...args] = line.trim().split(' ');
+async function executeCommandLines(input) {
+    const [command, ...args] = input.trim().split(' ');
 
     try {
         switch (command) {
             case '.exit':
-                rl.close();
-                break;
+                readlineInterface.close();
+                return;
+
             case 'ls':
                 await listFiles();
                 break;
-            case 'cd':
-                await changeDirectory(args[0]);
-                break;
+
             case 'cat':
+                if (args.length !== 1) throw new Error('Invalid number of arguments for cat');
                 await readFile(args[0]);
                 break;
             case 'add':
+                if (args.length !== 1) throw new Error('Invalid number of arguments for add');
                 await createFile(args[0]);
                 break;
             case 'rn':
+                if (args.length !== 2) throw new Error('Invalid number of arguments for rn');
                 await renameFile(args[0], args[1]);
                 break;
             case 'cp':
+                if (args.length !== 2) throw new Error('Invalid number of arguments for cp');
                 await copyFile(args[0], args[1]);
                 break;
             case 'mv':
+                if (args.length !== 2) throw new Error('Invalid number of arguments for mv');
                 await moveFile(args[0], args[1]);
                 break;
             case 'rm':
+                if (args.length !== 1) throw new Error('Invalid number of arguments for rm');
                 await deleteFile(args[0]);
                 break;
             case 'os':
+                if (args.length !== 1) throw new Error('Invalid number of arguments for os');
                 getOSInfo(args[0]);
                 break;
-            case 'hash':
-                await calculateHash(args[0]);
-                break;
-            case 'compress':
-                await compressFile(args[0], args[1]);
-                break;
-            case 'decompress':
-                await decompressFile(args[0], args[1]);
-                break;
             default:
-                console.log('Invalid command');
+                console.log('Invalid input');
         }
     } catch (error) {
         console.error('Operation failed:', error.message);
     }
+}
 
-    rl.prompt();
+readlineInterface.on('line', async (input) => {
+    await executeCommandLines(input);
+    readlineInterface.prompt();
 }).on('close', () => {
     console.log(`Thank you for using File Manager, ${username}, goodbye!`);
     process.exit(0);
 });
 
-rl.prompt();
+readlineInterface.prompt();
+
+
+// Functions
 
 async function listFiles() {
     const files = await fs.readdir(currentDir);
     console.log(files.join('\n'));
-}
-
-async function changeDirectory(targetDir) {
-    const newDir = path.resolve(currentDir, targetDir);
-    await fs.access(newDir);
-    currentDir = newDir;
-    console.log(`Changed to ${currentDir}`);
 }
 
 async function readFile(fileName) {
@@ -107,33 +95,30 @@ async function readFile(fileName) {
 async function createFile(fileName) {
     const filePath = path.join(currentDir, fileName);
     await fs.writeFile(filePath, '');
-    console.log(`File created: ${fileName}`);
 }
 
 async function renameFile(oldName, newName) {
     const oldPath = path.join(currentDir, oldName);
     const newPath = path.join(currentDir, newName);
     await fs.rename(oldPath, newPath);
-    console.log(`File renamed from ${oldName} to ${newName}`);
 }
 
 async function copyFile(source, destination) {
     const sourcePath = path.join(currentDir, source);
     const destPath = path.join(currentDir, destination);
-    await fs.copyFile(sourcePath, destPath);
-    console.log(`File copied from ${source} to ${destination}`);
+    const readStream = fs.createReadStream(sourcePath);
+    const writeStream = fs.createWriteStream(destPath);
+    readStream.pipe(writeStream);
 }
 
 async function moveFile(source, destination) {
     await copyFile(source, destination);
     await deleteFile(source);
-    console.log(`File moved from ${source} to ${destination}`);
 }
 
 async function deleteFile(fileName) {
     const filePath = path.join(currentDir, fileName);
     await fs.unlink(filePath);
-    console.log(`File deleted: ${fileName}`);
 }
 
 function getOSInfo(option) {
@@ -154,33 +139,9 @@ function getOSInfo(option) {
             console.log(os.arch());
             break;
         default:
-            console.log('Invalid option');
+            throw new Error('Invalid OS info option');
     }
 }
 
-async function calculateHash(fileName) {
-    const filePath = path.join(currentDir, fileName);
-    const fileContent = await fs.readFile(filePath);
-    const hash = crypto.createHash('sha256').update(fileContent).digest('hex');
-    console.log(`Hash of ${fileName}: ${hash}`);
-}
 
-async function compressFile(source, destination) {
-    const sourcePath = path.join(currentDir, source);
-    const destPath = path.join(currentDir, destination);
-    const readStream = createReadStream(sourcePath);
-    const writeStream = createWriteStream(destPath);
-    const gzip = createGzip();
-    readStream.pipe(gzip).pipe(writeStream);
-    console.log(`File compressed: ${source} -> ${destination}`);
-}
 
-async function decompressFile(source, destination) {
-    const sourcePath = path.join(currentDir, source);
-    const destPath = path.join(currentDir, destination);
-    const readStream = createReadStream(sourcePath);
-    const writeStream = createWriteStream(destPath);
-    const gunzip = createGunzip();
-    readStream.pipe(gunzip).pipe(writeStream);
-    console.log(`File decompressed: ${source} -> ${destination}`);
-}
